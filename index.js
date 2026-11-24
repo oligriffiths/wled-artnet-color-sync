@@ -3,6 +3,7 @@
 import { parseArgs } from 'node:util';
 import { ArtnetReceiver, ARTNET_PORT, resolveInterfaceAddress } from './lib/artnet-receiver.js';
 import { WledController } from './lib/wled-controller.js';
+import { Conductor } from './lib/conductor.js';
 
 const { values: args } = parseArgs({
   options: {
@@ -86,48 +87,36 @@ if (!(rate > 0)) {
   fail(`--rate must be a positive number (got "${args.rate}")`);
 }
 const transition = intArg('transition', args.transition, 0, 65535);
-const useIntensity = channels.intensity > 0;
-const highestChannel = Math.max(...Object.values(channels));
-
 const wled = new WledController({ url: wledUrl, rate, transition });
-wled.on('sent', (color) => {
+const receiver = new ArtnetReceiver({ address: listenAddress, universe });
+const conductor = new Conductor({ receiver, wled, channels });
+
+conductor.on('sent', (color) => {
   if (args.verbose) {
     const hex = [color.r, color.g, color.b].map((v) => v.toString(16).padStart(2, '0')).join('');
     console.log(`-> #${hex}${color.bri !== undefined ? ` bri ${color.bri}` : ''}`);
   }
 });
-wled.on('error', (err) => {
-  console.error(`WLED update failed: ${err.message}`);
-});
-
-const receiver = new ArtnetReceiver({ address: listenAddress, universe });
-receiver.on('dmx', ({ data }) => {
-  if (data.length < highestChannel) {
-    return;
+conductor.on('error', (err) => {
+  if (err.source === 'wled') {
+    console.error(`WLED update failed: ${err.message}`);
+  } else {
+    fail(`socket error: ${err.message}`);
   }
-  wled.setColor({
-    r: data[channels.red - 1],
-    g: data[channels.green - 1],
-    b: data[channels.blue - 1],
-    bri: useIntensity ? data[channels.intensity - 1] : undefined,
-  });
-});
-receiver.on('error', (err) => {
-  fail(`socket error: ${err.message}`);
 });
 
 try {
-  await receiver.start();
+  await conductor.start();
 } catch (err) {
   fail(`could not listen on ${args.interface} ${listenAddress}:${ARTNET_PORT}: ${err.message}`);
 }
+const useIntensity = channels.intensity > 0;
 const map = `${useIntensity ? `I${channels.intensity} ` : ''}R${channels.red} G${channels.green} B${channels.blue}`;
 console.log(`Listening on ${args.interface} ${listenAddress}:${ARTNET_PORT}, universe ${universe}, channels ${map}, max ${rate} Hz -> ${wledUrl}`);
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
-    receiver.stop();
-    wled.stop();
+    conductor.stop();
     process.exit(0);
   });
 }
