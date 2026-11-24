@@ -9,193 +9,229 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <main class="section app">
-    <div class="columns">
-      <section class="column is-7" aria-labelledby="artnet-title">
-        <div class="box panel-box">
-          <div class="level is-mobile mb-4">
-            <div class="level-left">
-              <h1 id="artnet-title" class="title is-4">Art-Net DMX</h1>
-            </div>
-            <div class="level-right">
-              <span id="artnet-status" class="tag">Starting…</span>
-            </div>
-          </div>
-
-          <div class="columns is-mobile mb-0">
-            <div class="column">
-              <div class="field">
-                <label class="label is-small" for="iface">Network adapter</label>
-                <div class="control">
-                  <div class="select is-fullwidth">
-                    <select id="iface"></select>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="column is-3">
-              <div class="field">
-                <label class="label is-small" for="universe">Universe</label>
-                <div class="control">
-                  <input id="universe" class="input" type="number" min="0" max="32767" step="1">
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <fieldset class="box channels-box mb-4">
-            <legend class="label is-small">DMX channels</legend>
-            <div class="columns is-mobile is-variable is-2">
-              <div class="column">
-                <div class="field">
-                  <label class="label is-small" for="ch-intensity">Intensity</label>
-                  <div class="control">
-                    <input id="ch-intensity" class="input" type="number" min="0" max="512" step="1" title="0 = no intensity channel">
-                  </div>
-                </div>
-              </div>
-              <div class="column">
-                <div class="field">
-                  <label class="label is-small" for="ch-red">Red</label>
-                  <div class="control">
-                    <input id="ch-red" class="input" type="number" min="1" max="512" step="1">
-                  </div>
-                </div>
-              </div>
-              <div class="column">
-                <div class="field">
-                  <label class="label is-small" for="ch-green">Green</label>
-                  <div class="control">
-                    <input id="ch-green" class="input" type="number" min="1" max="512" step="1">
-                  </div>
-                </div>
-              </div>
-              <div class="column">
-                <div class="field">
-                  <label class="label is-small" for="ch-blue">Blue</label>
-                  <div class="control">
-                    <input id="ch-blue" class="input" type="number" min="1" max="512" step="1">
-                  </div>
-                </div>
-              </div>
-            </div>
-            <p id="channel-error" class="help is-danger" hidden></p>
-          </fieldset>
-
-          <div class="preview mb-4">
-            <div id="swatch" class="swatch" aria-label="Incoming color"></div>
-            <div class="values">
-              <div class="notification value value-i">
-                <p class="is-size-7 has-text-grey">Intensity</p>
-                <p id="v-intensity" class="title is-5">–</p>
-              </div>
-              <div class="notification value value-r">
-                <p class="is-size-7 has-text-grey">Red</p>
-                <p id="v-red" class="title is-5">–</p>
-              </div>
-              <div class="notification value value-g">
-                <p class="is-size-7 has-text-grey">Green</p>
-                <p id="v-green" class="title is-5">–</p>
-              </div>
-              <div class="notification value value-b">
-                <p class="is-size-7 has-text-grey">Blue</p>
-                <p id="v-blue" class="title is-5">–</p>
-              </div>
-              <div class="notification value value-hex">
-                <p class="is-size-7 has-text-grey">Color</p>
-                <p id="v-hex" class="title is-5">–</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="level is-mobile mb-2">
-            <div class="level-left">
-              <h2 class="is-size-7 has-text-grey has-text-weight-semibold mb-0">Universe values</h2>
-            </div>
-            <div class="level-right">
-              <span class="help mt-0">Hover a cell for its channel and value</span>
-            </div>
-          </div>
-          <div id="grid" class="grid-dmx" role="img" aria-label="DMX channel values 1 to 512"></div>
+  <header class="app-header">
+    <div class="level is-mobile">
+      <div class="level-left">
+        <div>
+          <h1 class="title is-4 mb-1">Art-Net → WLED</h1>
+          <p id="summary" class="help mt-0">Loading…</p>
         </div>
-      </section>
+      </div>
+      <div class="level-right header-actions">
+        <button id="open-monitor" class="button" type="button" title="Every channel value of a universe, for debugging">DMX monitor</button>
+        <label class="checkbox" title="When off, every mapping starts disabled when the app opens">
+          <input id="auto-start" type="checkbox">
+          Resume enabled mappings when the app opens
+        </label>
+        <button id="add" class="button is-primary" type="button">+ Add mapping</button>
+      </div>
+    </div>
+  </header>
 
-      <section class="column is-5" aria-labelledby="wled-title">
-        <div class="box panel-box">
-          <div class="level is-mobile mb-4">
-            <div class="level-left">
-              <h1 id="wled-title" class="title is-4">WLED</h1>
-            </div>
-            <div class="level-right">
-              <span id="wled-status" class="tag">Searching…</span>
-            </div>
+  <main class="app-main">
+    <div id="empty" class="empty box has-text-centered" hidden>
+      <p class="title is-5">No mappings yet</p>
+      <p class="mb-4">A mapping takes a color from Art-Net DMX on one network adapter and universe, and sends it to one WLED controller.</p>
+      <button id="add-empty" class="button is-primary" type="button">+ Add your first mapping</button>
+    </div>
+    <div id="mappings" class="mappings"></div>
+  </main>
+
+  <!-- One mapping in the list. Filled in by renderer.js. -->
+  <template id="mapping-template">
+    <article class="box mapping">
+      <div class="mapping-head">
+        <label class="switch" title="Enable or disable this mapping">
+          <input class="m-enabled" type="checkbox">
+          <span class="slider" aria-hidden="true"></span>
+        </label>
+        <h2 class="m-name title is-5 mb-0"></h2>
+        <span class="m-state tag"></span>
+        <div class="buttons are-small mb-0 ml-auto">
+          <button class="m-edit button mb-0" type="button">Edit</button>
+          <button class="m-delete button is-danger is-outlined mb-0" type="button">Delete</button>
+        </div>
+      </div>
+      <div class="mapping-body">
+        <div class="mapping-side">
+          <div class="m-in swatch is-small" aria-label="Incoming color"></div>
+          <div class="min-w-0">
+            <p class="is-size-7 has-text-grey">Art-Net</p>
+            <p class="m-source has-text-weight-semibold truncate"></p>
+            <p class="m-channels is-size-7 has-text-grey truncate"></p>
+            <p class="m-rx is-size-7 truncate"></p>
           </div>
+        </div>
+        <div class="arrow" aria-hidden="true">→</div>
+        <div class="mapping-side">
+          <div class="m-out swatch is-small" aria-label="Last color sent"></div>
+          <div class="min-w-0">
+            <p class="is-size-7 has-text-grey">WLED</p>
+            <p class="m-target has-text-weight-semibold truncate"></p>
+            <p class="m-options is-size-7 has-text-grey truncate"></p>
+            <p class="m-tx is-size-7 truncate"></p>
+          </div>
+        </div>
+      </div>
+    </article>
+  </template>
 
-          <label class="label is-small" for="device">Controller</label>
-          <div class="field has-addons">
-            <div class="control is-expanded">
-              <div class="select is-fullwidth">
-                <select id="device"></select>
+  <!-- Add / edit a mapping -->
+  <div id="editor" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-card editor-card">
+      <header class="modal-card-head">
+        <p id="editor-title" class="modal-card-title">Add mapping</p>
+        <button id="editor-close" class="delete" type="button" aria-label="Close"></button>
+      </header>
+      <section class="modal-card-body">
+        <div class="columns mb-0">
+          <div class="column is-8">
+            <div class="field">
+              <label class="label is-small" for="f-name">Name <span class="has-text-grey">(optional)</span></label>
+              <div class="control">
+                <input id="f-name" class="input" type="text" placeholder="e.g. Stage left" autocomplete="off">
               </div>
             </div>
-            <div class="control">
-              <button id="rescan" class="button" type="button">Rescan</button>
-            </div>
           </div>
-
-          <div class="field">
-            <label class="label is-small" for="manual-ip">
-              IP address <span class="has-text-grey">(optional, overrides the list)</span>
+          <div class="column is-flex is-align-items-flex-end">
+            <label class="checkbox mb-3">
+              <input id="f-enabled" type="checkbox">
+              Enabled
             </label>
-            <div class="control">
-              <input id="manual-ip" class="input" type="text" placeholder="e.g. 192.168.1.50" spellcheck="false" autocomplete="off">
-            </div>
           </div>
+        </div>
 
-          <div class="field">
-            <div class="control">
+        <div class="columns">
+          <section class="column is-7" aria-labelledby="ed-artnet">
+            <h3 id="ed-artnet" class="title is-6 mb-3">Art-Net DMX <span id="f-rx" class="tag ml-2"></span></h3>
+
+            <div class="columns is-mobile mb-0">
+              <div class="column">
+                <div class="field">
+                  <label class="label is-small" for="f-iface">Network adapter</label>
+                  <div class="control">
+                    <div class="select is-fullwidth">
+                      <select id="f-iface"></select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="column is-4">
+                <div class="field">
+                  <label class="label is-small" for="f-universe">Universe</label>
+                  <div class="control">
+                    <input id="f-universe" class="input" type="number" min="0" max="32767" step="1">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <fieldset class="box channels-box mb-3">
+              <legend class="label is-small">DMX channels</legend>
+              <div class="columns is-mobile is-variable is-2 mb-0">
+                <div class="column">
+                  <label class="label is-small" for="f-ch-intensity">Intensity</label>
+                  <input id="f-ch-intensity" class="input" type="number" min="0" max="512" step="1" title="0 = no intensity channel">
+                </div>
+                <div class="column">
+                  <label class="label is-small" for="f-ch-red">Red</label>
+                  <input id="f-ch-red" class="input" type="number" min="1" max="512" step="1">
+                </div>
+                <div class="column">
+                  <label class="label is-small" for="f-ch-green">Green</label>
+                  <input id="f-ch-green" class="input" type="number" min="1" max="512" step="1">
+                </div>
+                <div class="column">
+                  <label class="label is-small" for="f-ch-blue">Blue</label>
+                  <input id="f-ch-blue" class="input" type="number" min="1" max="512" step="1">
+                </div>
+              </div>
+              <p class="help mt-0">Intensity 0 means no intensity channel.</p>
+            </fieldset>
+
+            <div class="preview mb-3">
+              <div id="f-swatch" class="swatch" aria-label="Incoming color"></div>
+              <div class="values">
+                <div class="notification value value-i"><p class="is-size-7 has-text-grey">Intensity</p><p id="f-v-i" class="title is-6">–</p></div>
+                <div class="notification value value-r"><p class="is-size-7 has-text-grey">Red</p><p id="f-v-r" class="title is-6">–</p></div>
+                <div class="notification value value-g"><p class="is-size-7 has-text-grey">Green</p><p id="f-v-g" class="title is-6">–</p></div>
+                <div class="notification value value-b"><p class="is-size-7 has-text-grey">Blue</p><p id="f-v-b" class="title is-6">–</p></div>
+                <div class="notification value value-hex"><p class="is-size-7 has-text-grey">Color</p><p id="f-v-hex" class="title is-6">–</p></div>
+              </div>
+            </div>
+            <button id="f-monitor" class="button is-small" type="button">Open this universe in the DMX monitor</button>
+          </section>
+
+          <section class="column is-5" aria-labelledby="ed-wled">
+            <h3 id="ed-wled" class="title is-6 mb-3">WLED</h3>
+
+            <label class="label is-small" for="f-device">Controller</label>
+            <div class="field has-addons">
+              <div class="control is-expanded">
+                <div class="select is-fullwidth">
+                  <select id="f-device"></select>
+                </div>
+              </div>
+              <div class="control">
+                <button id="f-rescan" class="button" type="button">Rescan</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label is-small" for="f-ip">IP address <span class="has-text-grey">(optional, overrides the list)</span></label>
+              <div class="control">
+                <input id="f-ip" class="input" type="text" placeholder="e.g. 192.168.1.50" spellcheck="false" autocomplete="off">
+              </div>
+            </div>
+
+            <div class="field">
               <label class="checkbox">
-                <input id="include-intensity" type="checkbox">
+                <input id="f-include-intensity" type="checkbox">
                 Send intensity as WLED brightness
               </label>
+              <p id="f-intensity-hint" class="help" hidden>Set an intensity channel to enable this.</p>
             </div>
-            <p id="intensity-hint" class="help" hidden>Set an intensity channel in the DMX panel to enable this.</p>
-          </div>
 
-          <div class="field">
-            <label class="label is-small" for="rate">Update rate (per second)</label>
-            <div class="control rate-control">
-              <input id="rate" class="input" type="number" min="1" max="60" step="1">
+            <div class="field">
+              <label class="label is-small" for="f-rate">Update rate (per second)</label>
+              <div class="control rate-control">
+                <input id="f-rate" class="input" type="number" min="1" max="60" step="1">
+              </div>
+              <p class="help">Updates go out only when the color changes.</p>
             </div>
-          </div>
-
-          <div class="field">
-            <div class="control">
-              <label class="checkbox">
-                <input id="auto-start" type="checkbox">
-                Start sending automatically when the app opens
-              </label>
-            </div>
-          </div>
-
-          <div class="field">
-            <div class="control">
-              <button id="start" class="button is-primary is-medium is-fullwidth" type="button">Start sending</button>
-            </div>
-          </div>
-
-          <div class="notification sending">
-            <div id="sent-swatch" class="swatch is-small" aria-label="Last color sent"></div>
-            <div>
-              <p id="send-target" class="has-text-weight-semibold">Not sending</p>
-              <p id="send-last" class="help mt-0">Updates go out only when the color changes.</p>
-            </div>
-          </div>
-          <p id="wled-error" class="help is-danger" hidden></p>
+          </section>
         </div>
+        <p id="f-error" class="help is-danger is-size-6" hidden></p>
       </section>
+      <footer class="modal-card-foot is-justify-content-flex-end">
+        <div class="buttons">
+          <button id="editor-cancel" class="button" type="button">Cancel</button>
+          <button id="editor-save" class="button is-primary" type="button">Save</button>
+        </div>
+      </footer>
     </div>
-  </main>
+  </div>
+
+  <!-- Delete confirmation -->
+  <div id="confirm" class="modal">
+    <div class="modal-background"></div>
+    <div class="modal-card confirm-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title">Delete mapping?</p>
+      </header>
+      <section class="modal-card-body">
+        <p id="confirm-text"></p>
+      </section>
+      <footer class="modal-card-foot is-justify-content-flex-end">
+        <div class="buttons">
+          <button id="confirm-cancel" class="button" type="button">Cancel</button>
+          <button id="confirm-delete" class="button is-danger" type="button">Delete</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
   <script src="renderer.js"></script>
 </body>
 </html>

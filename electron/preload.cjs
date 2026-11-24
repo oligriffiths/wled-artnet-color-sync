@@ -14,14 +14,18 @@ function subscribe(channel) {
 }
 
 contextBridge.exposeInMainWorld('bridge', {
+  getState: () => ipcRenderer.invoke('app:state'),
   listInterfaces: () => ipcRenderer.invoke('artnet:interfaces'),
-  listen: (config) => ipcRenderer.invoke('artnet:listen', config),
   rescanWled: () => ipcRenderer.invoke('wled:rescan'),
-  startSending: (config) => ipcRenderer.invoke('send:start', config),
-  stopSending: () => ipcRenderer.invoke('send:stop'),
-  onDmx: subscribe('artnet:dmx'),
-  onArtnetError: subscribe('artnet:error'),
+  setPreview: (interfaceId) => ipcRenderer.invoke('preview:set', interfaceId),
+  setSettings: (settings) => ipcRenderer.invoke('settings:set', settings),
+  saveMapping: (mapping) => ipcRenderer.invoke('mapping:save', mapping),
+  deleteMapping: (id) => ipcRenderer.invoke('mapping:delete', id),
+  setMappingEnabled: (id, enabled) => ipcRenderer.invoke('mapping:enable', id, enabled),
+  openMonitor: (selection) => ipcRenderer.invoke('monitor:open', selection),
+  onMonitorSelect: subscribe('monitor:select'),
+  onFrames: subscribe('dmx:frames'),
+  onStatus: subscribe('mapping:status'),
+  onConfig: subscribe('config:changed'),
   onDevices: subscribe('wled:devices'),
-  onWledError: subscribe('wled:error'),
-  onSent: subscribe('send:sent'),
 });

@@ -1,26 +1,22 @@
-// Electron main process: owns the Art-Net socket, WLED discovery and the WLED sender,
+// Electron main process: stores the mappings, runs them through the Engine, keeps WLED discovery going,
 // and streams state to the renderer over IPC.
 import { app, BrowserWindow, ipcMain } from 'electron';
-import { writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { ArtnetReceiver, listInterfaces, resolveInterfaceAddress } from '../lib/artnet-receiver.js';
-import { Conductor } from '../lib/conductor.js';
-import { WledController } from '../lib/wled-controller.js';
+import { listInterfaces } from '../lib/artnet-receiver.js';
 import { WledDiscovery } from '../lib/wled-discovery.js';
+import { Engine } from './engine.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const DMX_UI_FPS = 20;
+const ICON = path.join(here, 'assets', 'icon.png');
 
 let win = null;
-let receiver = null;
-let listenConfig = null;
-let latestFrame = null;
-let arrivals = []; // packet arrival times within the last second, for the incoming rate
-let frameTimer = null;
+let monitor = null;
 let discovery = null;
-let conductor = null;
-let sendConfig = null;
+const engine = new Engine();
+let config = { autoStart: true, mappings: [] };
 
 function send(channel, payload) {
   if (win && !win.isDestroyed()) {
@@ -28,48 +24,80 @@ function send(channel, payload) {
   }
 }
 
-// ---- Art-Net ---------------------------------------------------------------
-
-async function listen({ interface: iface, universe }) {
-  const address = resolveInterfaceAddress(iface);
-  const next = new ArtnetReceiver({ address, universe });
-  const wasSending = Boolean(conductor);
-  stopSending();
-  receiver?.stop();
-  receiver = null;
-  latestFrame = null;
-  arrivals = [];
-  next.on('dmx', ({ universe: u, source, data }) => {
-    const now = Date.now();
-    arrivals.push(now);
-    while (arrivals[0] < now - 1000) {
-      arrivals.shift();
+/** Sends to every open window (the main window and the DMX monitor). */
+function broadcast(channel, payload) {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed()) {
+      w.webContents.send(channel, payload);
     }
-    latestFrame = { universe: u, source, data: Array.from(data), at: now, fps: arrivals.length };
-  });
-  next.on('error', (err) => {
-    send('artnet:error', err.message);
-  });
-  await next.start();
-  receiver = next;
-  listenConfig = { interface: iface, universe, address };
-  if (wasSending && sendConfig) {
-    startSending(sendConfig);
   }
-  return listenConfig;
 }
 
-// Coalesce DMX to a fixed UI rate; Art-Net can arrive at 40+ fps per universe.
-function startFrameTimer() {
-  frameTimer = setInterval(() => {
-    if (latestFrame) {
-      send('artnet:dmx', latestFrame);
-      latestFrame = null;
+// ---- Config ----------------------------------------------------------------
+
+function configPath() {
+  return process.env.APP_CONFIG ?? path.join(app.getPath('userData'), 'config.json');
+}
+
+async function loadConfig() {
+  try {
+    const saved = JSON.parse(await readFile(configPath(), 'utf8'));
+    config = {
+      autoStart: saved.autoStart !== false,
+      mappings: Array.isArray(saved.mappings) ? saved.mappings : [],
+    };
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      console.error(`could not read ${configPath()}: ${err.message}`);
     }
-  }, 1000 / DMX_UI_FPS);
+  }
+  if (!config.autoStart) {
+    // Mappings keep their settings but wait for the user to enable them.
+    config.mappings = config.mappings.map((m) => ({ ...m, enabled: false }));
+  }
 }
 
-// ---- WLED ------------------------------------------------------------------
+async function saveConfig() {
+  const file = configPath();
+  await mkdir(path.dirname(file), { recursive: true });
+  // Write then rename, so a crash never leaves a half-written config.
+  await writeFile(`${file}.tmp`, JSON.stringify(config, null, 2));
+  await rename(`${file}.tmp`, file);
+}
+
+async function commit() {
+  await saveConfig();
+  send('config:changed', config);
+  await engine.apply(config.mappings);
+  return config;
+}
+
+/** Keeps only known fields with sane types, so the config file stays predictable. */
+function cleanMapping(input, existing) {
+  const int = (v, fallback) => (Number.isInteger(Number(v)) && v !== '' && v !== null ? Number(v) : fallback);
+  const channels = input.channels ?? {};
+  return {
+    id: existing?.id ?? randomUUID(),
+    name: String(input.name ?? '').trim(),
+    enabled: Boolean(input.enabled ?? existing?.enabled ?? true),
+    interface: String(input.interface ?? 'localhost'),
+    universe: int(input.universe, 0),
+    channels: {
+      intensity: int(channels.intensity, 0),
+      red: int(channels.red, 1),
+      green: int(channels.green, 2),
+      blue: int(channels.blue, 3),
+    },
+    wled: {
+      url: String(input.wled?.url ?? '').trim(),
+      name: String(input.wled?.name ?? '').trim(),
+    },
+    includeIntensity: Boolean(input.includeIntensity),
+    rate: int(input.rate, 5),
+  };
+}
+
+// ---- WLED discovery --------------------------------------------------------
 
 function startDiscovery() {
   discovery?.stop();
@@ -78,101 +106,158 @@ function startDiscovery() {
     send('wled:devices', discovery.found);
   });
   discovery.on('error', (err) => {
-    send('wled:error', `discovery: ${err.message}`);
+    console.error(`WLED discovery: ${err.message}`);
   });
   discovery.start();
   send('wled:devices', discovery.found);
 }
 
-function normalizeUrl(value) {
-  let url = String(value ?? '').trim();
-  if (!url) {
-    throw new Error('choose a WLED controller or enter its IP address');
-  }
-  if (!/^https?:\/\//i.test(url)) {
-    url = `http://${url}`;
-  }
-  new URL(url);
-  return url;
-}
-
-function startSending(config) {
-  if (!receiver) {
-    throw new Error('Art-Net is not listening');
-  }
-  stopSending();
-  const url = normalizeUrl(config.url);
-  const { channels, includeIntensity, rate } = config;
-  const wled = new WledController({ url, rate: Number(rate) });
-  conductor = new Conductor({
-    receiver,
-    wled,
-    channels: { ...channels, intensity: includeIntensity ? channels.intensity : 0 },
-  });
-  conductor.on('sent', (color) => {
-    send('send:sent', color);
-  });
-  conductor.on('error', (err) => {
-    send(err.source === 'wled' ? 'wled:error' : 'artnet:error', err.message);
-  });
-  // The receiver is already started, so this only subscribes.
-  conductor.start();
-  sendConfig = { ...config, url };
-  return sendConfig;
-}
-
-function stopSending() {
-  conductor?.stop({ stopReceiver: false });
-  conductor = null;
-}
-
 // ---- IPC -------------------------------------------------------------------
 
-/** Wraps a handler so errors reach the renderer as { error } instead of a rejected invoke. */
+/** Wraps a handler so errors reach the renderer as { ok: false, error } instead of a rejected invoke. */
 function handle(channel, fn) {
-  ipcMain.handle(channel, async (_event, arg) => {
+  ipcMain.handle(channel, async (_event, ...args) => {
     try {
-      return { ok: true, value: await fn(arg) };
+      return { ok: true, value: await fn(...args) };
     } catch (err) {
       return { ok: false, error: err.message };
     }
   });
 }
 
+handle('app:state', () => ({
+  config,
+  interfaces: listInterfaces(),
+  devices: discovery?.found ?? [],
+  status: engine.statuses,
+}));
 handle('artnet:interfaces', () => listInterfaces());
-handle('artnet:listen', (config) => listen(config));
 handle('wled:rescan', () => {
   startDiscovery();
 });
-handle('send:start', (config) => startSending(config));
-handle('send:stop', () => {
-  stopSending();
-  sendConfig = null;
+// Each window keeps its own preview adapter, keyed by its webContents id.
+ipcMain.handle('preview:set', async (event, interfaceId) => {
+  try {
+    await engine.setPreview(event.sender.id, interfaceId ?? null);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+handle('monitor:open', (selection) => {
+  openMonitor(selection);
+});
+handle('settings:set', async (settings) => {
+  config.autoStart = Boolean(settings.autoStart);
+  await saveConfig();
+  send('config:changed', config);
+  return config;
+});
+handle('mapping:save', async (input) => {
+  const index = config.mappings.findIndex((m) => m.id === input.id);
+  const mapping = cleanMapping(input, config.mappings[index]);
+  if (index >= 0) {
+    config.mappings[index] = mapping;
+  } else {
+    config.mappings.push(mapping);
+  }
+  await commit();
+  return mapping;
+});
+handle('mapping:delete', async (id) => {
+  config.mappings = config.mappings.filter((m) => m.id !== id);
+  return commit();
+});
+handle('mapping:enable', async (id, enabled) => {
+  const mapping = config.mappings.find((m) => m.id === id);
+  if (!mapping) {
+    throw new Error('mapping not found');
+  }
+  mapping.enabled = Boolean(enabled);
+  return commit();
 });
 
-// ---- Window ----------------------------------------------------------------
+engine.on('frames', (frames) => {
+  broadcast('dmx:frames', frames);
+});
+engine.on('status', (status) => {
+  send('mapping:status', status);
+});
+
+// ---- Windows ---------------------------------------------------------------
+
+const webPreferences = {
+  preload: path.join(here, 'preload.cjs'),
+  contextIsolation: true,
+  sandbox: true,
+  nodeIntegration: false,
+};
+
+function forwardRendererErrors(w, label) {
+  w.webContents.on('preload-error', (_event, preloadPath, err) => {
+    console.error(`${label} preload error in ${preloadPath}: ${err.stack ?? err}`);
+  });
+  w.webContents.on('console-message', (event) => {
+    if (event.level === 'error' || event.level === 'warning') {
+      console.error(`${label} ${event.level}: ${event.message} (${event.sourceId}:${event.lineNumber})`);
+    }
+  });
+}
+
+/**
+ * Opens the DMX monitor (or focuses it), optionally switching it to an adapter and universe.
+ * @param {{ interface?: string, universe?: number }} [selection]
+ */
+function openMonitor(selection) {
+  if (monitor && !monitor.isDestroyed()) {
+    if (selection) {
+      monitor.webContents.send('monitor:select', selection);
+    }
+    monitor.show();
+    monitor.focus();
+    return;
+  }
+  monitor = new BrowserWindow({
+    width: 1000,
+    height: 640,
+    minWidth: 700,
+    minHeight: 420,
+    title: 'DMX Monitor',
+    backgroundColor: '#14161a',
+    icon: ICON,
+    webPreferences,
+  });
+  forwardRendererErrors(monitor, 'monitor');
+  const contentsId = monitor.webContents.id;
+  monitor.on('closed', () => {
+    engine.setPreview(contentsId, null);
+    monitor = null;
+  });
+  monitor.loadFile(path.join(here, 'renderer', 'monitor.html'), {
+    query: selection ? { interface: selection.interface ?? '', universe: String(selection.universe ?? '') } : {},
+  });
+}
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1100,
-    height: 760,
-    minWidth: 820,
+    width: 1180,
+    height: 800,
+    minWidth: 860,
     minHeight: 600,
     title: 'Art-Net → WLED',
-    backgroundColor: '#15171c',
-    webPreferences: {
-      preload: path.join(here, 'preload.cjs'),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-    },
+    backgroundColor: '#14161a',
+    icon: ICON,
+    webPreferences,
   });
-  win.webContents.on('preload-error', (_event, preloadPath, err) => {
-    console.error(`preload error in ${preloadPath}: ${err.stack ?? err}`);
+  forwardRendererErrors(win, 'renderer');
+  const contentsId = win.webContents.id;
+  win.on('closed', () => {
+    engine.setPreview(contentsId, null);
   });
-  win.webContents.on('console-message', (event) => {
-    if (event.level === 'error' || event.level === 'warning') {
-      console.error(`renderer ${event.level}: ${event.message} (${event.sourceId}:${event.lineNumber})`);
+  // Closing the main window quits the app, monitor included.
+  win.on('close', () => {
+    if (monitor && !monitor.isDestroyed()) {
+      monitor.destroy();
     }
   });
   win.loadFile(path.join(here, 'renderer', 'index.html'));
@@ -187,16 +272,20 @@ function createWindow() {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Windows and Linux take the icon from each window; macOS shows the Dock icon, which an unpackaged
+  // app has to set at runtime.
+  if (process.platform === 'darwin') {
+    app.dock?.setIcon(ICON);
+  }
+  await loadConfig();
   createWindow();
-  startFrameTimer();
   startDiscovery();
+  await engine.apply(config.mappings);
 });
 
 app.on('window-all-closed', () => {
-  clearInterval(frameTimer);
-  stopSending();
-  receiver?.stop();
+  engine.close();
   discovery?.stop();
   app.quit();
 });

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DMX Monitor</title>
+  <link rel="stylesheet" href="../../node_modules/bulma/css/bulma.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="monitor-page">
+  <header class="app-header">
+    <div class="monitor-controls">
+      <h1 class="title is-5 mb-0">DMX Monitor</h1>
+      <div class="field mb-0">
+        <label class="label is-small" for="m-iface">Network adapter</label>
+        <div class="control">
+          <div class="select is-small">
+            <select id="m-iface"></select>
+          </div>
+        </div>
+      </div>
+      <div class="field mb-0">
+        <label class="label is-small" for="m-universe">Universe</label>
+        <div class="control">
+          <input id="m-universe" class="input is-small universe-input" type="number" min="0" max="32767" step="1">
+        </div>
+      </div>
+      <span id="m-status" class="tag ml-auto">Starting…</span>
+    </div>
+    <p id="m-mapped" class="help mb-0"></p>
+  </header>
+
+  <main class="monitor-main">
+    <div id="m-grid" class="monitor-grid" role="table" aria-label="DMX channel values 1 to 512"></div>
+  </main>
+
+  <script src="monitor.js"></script>
+</body>
+</html>

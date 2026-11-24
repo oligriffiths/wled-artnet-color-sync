@@ -1,6 +1,6 @@
-/* Only what Bulma doesn't provide: color swatches, the DMX grid and channel accents. */
+/* Only what Bulma doesn't provide: layout, color swatches, the DMX grid, channel accents and the switch. */
 
-/* A denser scale than Bulma's default so both panels fit a laptop-sized window. */
+/* A denser scale than Bulma's default so more fits a laptop-sized window. */
 html {
   font-size: 14px;
 }
@@ -16,14 +16,164 @@ html {
   --dmx-blue: #5b8cff;
 }
 
-.app {
-  padding: 0.75rem;
-  min-height: 100vh;
+.min-w-0 {
+  min-width: 0;
 }
 
-.panel-box {
-  height: 100%;
+.truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Page layout ---------------------------------------------------------- */
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   padding: 1rem 1.25rem;
+  background: var(--bulma-scheme-main);
+  border-bottom: 1px solid var(--bulma-border-weak);
+}
+
+.header-actions {
+  gap: 1.25rem;
+}
+
+.app-main {
+  padding: 1rem 1.25rem 2rem;
+}
+
+.empty {
+  max-width: 34rem;
+  margin: 3rem auto;
+  padding: 2rem;
+}
+
+.mappings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(30rem, 1fr));
+  gap: 1rem;
+}
+
+/* ---- Mapping card ------------------------------------------------------------ */
+
+.mapping {
+  margin-bottom: 0 !important;
+  padding: 1rem 1.25rem;
+  border-left: 4px solid var(--bulma-border);
+}
+
+.mapping.is-running {
+  border-left-color: var(--bulma-success);
+}
+
+.mapping.is-error {
+  border-left-color: var(--bulma-danger);
+}
+
+.mapping.is-disabled .mapping-body {
+  opacity: 0.55;
+}
+
+.mapping-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+  min-width: 0;
+}
+
+.mapping-head .title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.mapping-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.mapping-side {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 0;
+}
+
+.arrow {
+  font-size: 1.4rem;
+  color: var(--bulma-grey);
+}
+
+/* ---- Switch -------------------------------------------------------------------- */
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 2.6rem;
+  height: 1.5rem;
+  flex: none;
+  cursor: pointer;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+
+.slider {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--bulma-border);
+  transition: background-color 120ms;
+  pointer-events: none;
+}
+
+.slider::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(1.5rem - 6px);
+  height: calc(1.5rem - 6px);
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 120ms;
+}
+
+.switch input:checked + .slider {
+  background: var(--bulma-success);
+}
+
+.switch input:checked + .slider::after {
+  transform: translateX(1.1rem);
+}
+
+.switch input:focus-visible + .slider {
+  outline: 2px solid var(--bulma-link);
+  outline-offset: 2px;
+}
+
+/* ---- Editor ---------------------------------------------------------------------- */
+
+.editor-card {
+  width: min(1100px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+}
+
+.confirm-card {
+  width: min(28rem, calc(100vw - 2rem));
 }
 
 .channels-box {
@@ -42,7 +192,7 @@ html {
   max-width: 10rem;
 }
 
-/* ---- Color preview ---------------------------------------------------- */
+/* ---- Color preview ---------------------------------------------------------------- */
 
 .preview {
   display: flex;
@@ -51,8 +201,8 @@ html {
 }
 
 .swatch {
-  width: 5.5rem;
-  min-height: 5.5rem;
+  width: 4.5rem;
+  min-height: 4.5rem;
   border-radius: var(--bulma-radius-large);
   border: 1px solid var(--bulma-border);
   background: #000;
@@ -76,7 +226,7 @@ html {
 
 .values .value {
   margin: 0;
-  padding: 0.5rem 0.75rem;
+  padding: 0.4rem 0.6rem;
   border-top: 3px solid var(--bulma-grey);
 }
 
@@ -103,46 +253,79 @@ html {
   border-top-color: var(--bulma-text-strong) !important;
 }
 
-/* ---- DMX grid ----------------------------------------------------------- */
+/* ---- DMX monitor ------------------------------------------------------------------- */
 
-.grid-dmx {
+.monitor-page {
+  min-height: 100vh;
+}
+
+.monitor-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+}
+
+.monitor-controls .title {
+  align-self: center;
+}
+
+.universe-input {
+  width: 6rem;
+}
+
+.monitor-main {
+  padding: 0.75rem 1.25rem 1.25rem;
+}
+
+.monitor-grid {
   display: grid;
-  grid-template-columns: repeat(32, minmax(0, 1fr));
+  grid-template-columns: 2.5rem repeat(32, minmax(0, 1fr));
   gap: 2px;
 }
 
-.cell {
+.row-label {
+  font-size: 0.7rem;
+  color: var(--bulma-grey);
+  text-align: right;
+  padding-right: 0.4rem;
+  align-self: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.mcell {
   aspect-ratio: 1;
+  min-height: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 2px;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--bulma-text-weak);
   background: rgb(91 140 255 / var(--level, 0));
   outline: 1px solid rgb(255 255 255 / 0.05);
 }
 
-.cell.mapped {
+.mcell.bright {
+  color: #fff;
+}
+
+.mapped {
   outline: 2px solid var(--bulma-text-strong);
   outline-offset: -1px;
 }
 
-.cell.mapped-r {
+.mapped.mapped-r {
   outline-color: var(--dmx-red);
 }
 
-.cell.mapped-g {
+.mapped.mapped-g {
   outline-color: var(--dmx-green);
 }
 
-.cell.mapped-b {
+.mapped.mapped-b {
   outline-color: var(--dmx-blue);
-}
-
-/* ---- Sending status -------------------------------------------------------- */
-
-.sending {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.5rem;
 }
 
 .checkbox input {
