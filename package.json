@@ -1,0 +1,26 @@
+{
+  "name": "artnet-wled-color",
+  "version": "1.0.0",
+  "description": "Receive Art-Net DMX and set the primary color of a WLED device",
+  "type": "module",
+  "main": "lib/index.js",
+  "bin": {
+    "artnet-wled-color": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "exports": {
+    ".": "./lib/index.js",
+    "./artnet-receiver": "./lib/artnet-receiver.js",
+    "./wled-controller": "./lib/wled-controller.js"
+  },
+  "files": [
+    "index.js",
+    "lib"
+  ]
+}
