@@ -4,7 +4,7 @@ import { parseArgs } from 'node:util';
 import { ArtnetReceiver, ARTNET_PORT, resolveInterfaceAddress } from './lib/artnet-receiver.js';
 import { WledController } from './lib/wled-controller.js';
 import { Conductor } from './lib/conductor.js';
-import { discoverWled } from './lib/wled-discovery.js';
+import { WledDiscovery } from './lib/wled-discovery.js';
 
 const { values: args } = parseArgs({
   options: {
@@ -81,14 +81,13 @@ async function discover() {
   console.log(`Searching for WLED${name ? ` "${name}"` : ''} with mDNS...`);
   let devices;
   try {
-    devices = await discoverWled({ timeout, name, first: Boolean(name) });
+    devices = await new WledDiscovery().find({ timeout, name, first: Boolean(name) });
   } catch (err) {
     fail(`mDNS discovery failed: ${err.message}`);
   }
   if (devices.length === 0) {
     fail(`no WLED device found${name ? ` named "${name}"` : ''} within ${timeout} ms; pass --wled <url>`);
   }
-  devices.sort((a, b) => a.name.localeCompare(b.name));
   const [device] = devices;
   if (devices.length > 1) {
     console.log(`Found ${devices.length} WLED devices: ${devices.map((d) => `${d.name} (${d.address})`).join(', ')}`);
