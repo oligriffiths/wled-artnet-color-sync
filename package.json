@@ -18,10 +18,14 @@
     ".": "./lib/index.js",
     "./artnet-receiver": "./lib/artnet-receiver.js",
     "./wled-controller": "./lib/wled-controller.js",
-    "./conductor": "./lib/conductor.js"
+    "./conductor": "./lib/conductor.js",
+    "./wled-discovery": "./lib/wled-discovery.js"
   },
   "files": [
     "index.js",
     "lib"
-  ]
+  ],
+  "dependencies": {
+    "bonjour-service": "1.4.4"
+  }
 }

@@ -4,10 +4,13 @@ import { parseArgs } from 'node:util';
 import { ArtnetReceiver, ARTNET_PORT, resolveInterfaceAddress } from './lib/artnet-receiver.js';
 import { WledController } from './lib/wled-controller.js';
 import { Conductor } from './lib/conductor.js';
+import { WledDiscovery } from './lib/wled-discovery.js';
 
 const { values: args } = parseArgs({
   options: {
     wled: { type: 'string', short: 'w' },
+    'wled-name': { type: 'string' },
+    'discover-timeout': { type: 'string', default: '5000' },
     universe: { type: 'string', short: 'u', default: '0' },
     channel: { type: 'string', short: 'c', default: '1' },
     intensity: { type: 'string', short: 'i' },
@@ -26,7 +29,9 @@ if (args.help) {
   console.log(`Usage: node index.js [options]
 
   -w, --wled <url>      WLED address, e.g. http://192.168.1.50 or 192.168.1.50
-                        (required; or set the WLED_URL environment variable)
+                        (or set WLED_URL). When omitted, WLED is discovered with mDNS.
+  --wled-name <name>    With discovery, pick the device by mDNS name, e.g. wled-bc7c7c
+  --discover-timeout <ms>  How long to search for WLED (default 5000)
   -u, --universe <n>    Art-Net universe / port address 0-32767 (default 0)
   -c, --channel <n>     Start channel: intensity=n, red=n+1, green=n+2, blue=n+3 (default 1)
   -i, --intensity <n>   Intensity channel; 0 disables intensity (overrides -c)
@@ -57,17 +62,41 @@ function intArg(name, value, min, max) {
 }
 
 let wledUrl = args.wled ?? process.env.WLED_URL;
-if (!wledUrl) {
-  fail('missing WLED address: pass --wled <url> or set WLED_URL (see --help)');
+if (wledUrl) {
+  if (!/^https?:\/\//i.test(wledUrl)) {
+    wledUrl = `http://${wledUrl}`;
+  }
+  try {
+    new URL(wledUrl);
+  } catch {
+    fail(`invalid WLED address "${wledUrl}"`);
+  }
+} else {
+  wledUrl = await discover();
 }
-if (!/^https?:\/\//i.test(wledUrl)) {
-  wledUrl = `http://${wledUrl}`;
+
+async function discover() {
+  const timeout = intArg('discover-timeout', args['discover-timeout'], 100, 600000);
+  const name = args['wled-name'];
+  console.log(`Searching for WLED${name ? ` "${name}"` : ''} with mDNS...`);
+  let devices;
+  try {
+    devices = await new WledDiscovery().find({ timeout, name, first: Boolean(name) });
+  } catch (err) {
+    fail(`mDNS discovery failed: ${err.message}`);
+  }
+  if (devices.length === 0) {
+    fail(`no WLED device found${name ? ` named "${name}"` : ''} within ${timeout} ms; pass --wled <url>`);
+  }
+  const [device] = devices;
+  if (devices.length > 1) {
+    console.log(`Found ${devices.length} WLED devices: ${devices.map((d) => `${d.name} (${d.address})`).join(', ')}`);
+    console.log('Using the first; pick one with --wled-name.');
+  }
+  console.log(`Using WLED ${device.name} at ${device.url}${device.mac ? ` (mac ${device.mac})` : ''}`);
+  return device.url;
 }
-try {
-  new URL(wledUrl);
-} catch {
-  fail(`invalid WLED address "${wledUrl}"`);
-}
+
 let listenAddress;
 try {
   listenAddress = resolveInterfaceAddress(args.interface);
