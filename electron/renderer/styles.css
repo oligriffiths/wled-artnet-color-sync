@@ -1,0 +1,150 @@
+/* Only what Bulma doesn't provide: color swatches, the DMX grid and channel accents. */
+
+/* A denser scale than Bulma's default so both panels fit a laptop-sized window. */
+html {
+  font-size: 14px;
+}
+
+/* Bulma's display rules (e.g. .help) would otherwise override the hidden attribute. */
+[hidden] {
+  display: none !important;
+}
+
+:root {
+  --dmx-red: #ff5d5d;
+  --dmx-green: #46d37c;
+  --dmx-blue: #5b8cff;
+}
+
+.app {
+  padding: 0.75rem;
+  min-height: 100vh;
+}
+
+.panel-box {
+  height: 100%;
+  padding: 1rem 1.25rem;
+}
+
+.channels-box {
+  padding: 0.75rem 1rem 0.5rem;
+  margin: 0;
+  box-shadow: none;
+  border: 1px solid var(--bulma-border-weak);
+}
+
+.channels-box legend {
+  padding: 0 0.25rem;
+  margin-bottom: 0;
+}
+
+.rate-control {
+  max-width: 10rem;
+}
+
+/* ---- Color preview ---------------------------------------------------- */
+
+.preview {
+  display: flex;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.swatch {
+  width: 5.5rem;
+  min-height: 5.5rem;
+  border-radius: var(--bulma-radius-large);
+  border: 1px solid var(--bulma-border);
+  background: #000;
+  flex: none;
+  transition: background-color 60ms linear;
+}
+
+.swatch.is-small {
+  width: 2.75rem;
+  min-height: 2.75rem;
+  height: 2.75rem;
+}
+
+.values {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.5fr);
+  gap: 0.5rem;
+  flex: 1;
+  align-content: center;
+}
+
+.values .value {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  border-top: 3px solid var(--bulma-grey);
+}
+
+.values .value .title {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.value-r {
+  border-top-color: var(--dmx-red) !important;
+}
+
+.value-g {
+  border-top-color: var(--dmx-green) !important;
+}
+
+.value-b {
+  border-top-color: var(--dmx-blue) !important;
+}
+
+.value-hex {
+  border-top-color: var(--bulma-text-strong) !important;
+}
+
+/* ---- DMX grid ----------------------------------------------------------- */
+
+.grid-dmx {
+  display: grid;
+  grid-template-columns: repeat(32, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: rgb(91 140 255 / var(--level, 0));
+  outline: 1px solid rgb(255 255 255 / 0.05);
+}
+
+.cell.mapped {
+  outline: 2px solid var(--bulma-text-strong);
+  outline-offset: -1px;
+}
+
+.cell.mapped-r {
+  outline-color: var(--dmx-red);
+}
+
+.cell.mapped-g {
+  outline-color: var(--dmx-green);
+}
+
+.cell.mapped-b {
+  outline-color: var(--dmx-blue);
+}
+
+/* ---- Sending status -------------------------------------------------------- */
+
+.sending {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.checkbox input {
+  margin-right: 0.4rem;
+}

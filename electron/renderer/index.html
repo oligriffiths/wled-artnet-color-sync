@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Art-Net → WLED</title>
+  <link rel="stylesheet" href="../../node_modules/bulma/css/bulma.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="section app">
+    <div class="columns">
+      <section class="column is-7" aria-labelledby="artnet-title">
+        <div class="box panel-box">
+          <div class="level is-mobile mb-4">
+            <div class="level-left">
+              <h1 id="artnet-title" class="title is-4">Art-Net DMX</h1>
+            </div>
+            <div class="level-right">
+              <span id="artnet-status" class="tag">Starting…</span>
+            </div>
+          </div>
+
+          <div class="columns is-mobile mb-0">
+            <div class="column">
+              <div class="field">
+                <label class="label is-small" for="iface">Network adapter</label>
+                <div class="control">
+                  <div class="select is-fullwidth">
+                    <select id="iface"></select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="column is-3">
+              <div class="field">
+                <label class="label is-small" for="universe">Universe</label>
+                <div class="control">
+                  <input id="universe" class="input" type="number" min="0" max="32767" step="1">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <fieldset class="box channels-box mb-4">
+            <legend class="label is-small">DMX channels</legend>
+            <div class="columns is-mobile is-variable is-2">
+              <div class="column">
+                <div class="field">
+                  <label class="label is-small" for="ch-intensity">Intensity</label>
+                  <div class="control">
+                    <input id="ch-intensity" class="input" type="number" min="0" max="512" step="1" title="0 = no intensity channel">
+                  </div>
+                </div>
+              </div>
+              <div class="column">
+                <div class="field">
+                  <label class="label is-small" for="ch-red">Red</label>
+                  <div class="control">
+                    <input id="ch-red" class="input" type="number" min="1" max="512" step="1">
+                  </div>
+                </div>
+              </div>
+              <div class="column">
+                <div class="field">
+                  <label class="label is-small" for="ch-green">Green</label>
+                  <div class="control">
+                    <input id="ch-green" class="input" type="number" min="1" max="512" step="1">
+                  </div>
+                </div>
+              </div>
+              <div class="column">
+                <div class="field">
+                  <label class="label is-small" for="ch-blue">Blue</label>
+                  <div class="control">
+                    <input id="ch-blue" class="input" type="number" min="1" max="512" step="1">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p id="channel-error" class="help is-danger" hidden></p>
+          </fieldset>
+
+          <div class="preview mb-4">
+            <div id="swatch" class="swatch" aria-label="Incoming color"></div>
+            <div class="values">
+              <div class="notification value value-i">
+                <p class="is-size-7 has-text-grey">Intensity</p>
+                <p id="v-intensity" class="title is-5">–</p>
+              </div>
+              <div class="notification value value-r">
+                <p class="is-size-7 has-text-grey">Red</p>
+                <p id="v-red" class="title is-5">–</p>
+              </div>
+              <div class="notification value value-g">
+                <p class="is-size-7 has-text-grey">Green</p>
+                <p id="v-green" class="title is-5">–</p>
+              </div>
+              <div class="notification value value-b">
+                <p class="is-size-7 has-text-grey">Blue</p>
+                <p id="v-blue" class="title is-5">–</p>
+              </div>
+              <div class="notification value value-hex">
+                <p class="is-size-7 has-text-grey">Color</p>
+                <p id="v-hex" class="title is-5">–</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="level is-mobile mb-2">
+            <div class="level-left">
+              <h2 class="is-size-7 has-text-grey has-text-weight-semibold mb-0">Universe values</h2>
+            </div>
+            <div class="level-right">
+              <span class="help mt-0">Hover a cell for its channel and value</span>
+            </div>
+          </div>
+          <div id="grid" class="grid-dmx" role="img" aria-label="DMX channel values 1 to 512"></div>
+        </div>
+      </section>
+
+      <section class="column is-5" aria-labelledby="wled-title">
+        <div class="box panel-box">
+          <div class="level is-mobile mb-4">
+            <div class="level-left">
+              <h1 id="wled-title" class="title is-4">WLED</h1>
+            </div>
+            <div class="level-right">
+              <span id="wled-status" class="tag">Searching…</span>
+            </div>
+          </div>
+
+          <label class="label is-small" for="device">Controller</label>
+          <div class="field has-addons">
+            <div class="control is-expanded">
+              <div class="select is-fullwidth">
+                <select id="device"></select>
+              </div>
+            </div>
+            <div class="control">
+              <button id="rescan" class="button" type="button">Rescan</button>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="label is-small" for="manual-ip">
+              IP address <span class="has-text-grey">(optional, overrides the list)</span>
+            </label>
+            <div class="control">
+              <input id="manual-ip" class="input" type="text" placeholder="e.g. 192.168.1.50" spellcheck="false" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="control">
+              <label class="checkbox">
+                <input id="include-intensity" type="checkbox">
+                Send intensity as WLED brightness
+              </label>
+            </div>
+            <p id="intensity-hint" class="help" hidden>Set an intensity channel in the DMX panel to enable this.</p>
+          </div>
+
+          <div class="field">
+            <label class="label is-small" for="rate">Update rate (per second)</label>
+            <div class="control rate-control">
+              <input id="rate" class="input" type="number" min="1" max="60" step="1">
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="control">
+              <label class="checkbox">
+                <input id="auto-start" type="checkbox">
+                Start sending automatically when the app opens
+              </label>
+            </div>
+          </div>
+
+          <div class="field">
+            <div class="control">
+              <button id="start" class="button is-primary is-medium is-fullwidth" type="button">Start sending</button>
+            </div>
+          </div>
+
+          <div class="notification sending">
+            <div id="sent-swatch" class="swatch is-small" aria-label="Last color sent"></div>
+            <div>
+              <p id="send-target" class="has-text-weight-semibold">Not sending</p>
+              <p id="send-last" class="help mt-0">Updates go out only when the color changes.</p>
+            </div>
+          </div>
+          <p id="wled-error" class="help is-danger" hidden></p>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="renderer.js"></script>
+</body>
+</html>
